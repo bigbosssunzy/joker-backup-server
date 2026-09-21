@@ -24,7 +24,7 @@ const upload = multer({
     limits: { fileSize: 100 * 1024 * 1024 }
 });
 
-// 🔒 Main Dashboard with Passcode Protection & Media Gallery
+// 🔒 Main Dashboard
 app.get('/', (req, res) => {
     const userPin = req.query.pin;
 
@@ -59,7 +59,7 @@ app.get('/', (req, res) => {
     let filesHtml = '';
     try {
         const allFiles = fs.readdirSync(backupsDir);
-        const mediaFiles = allFiles.filter(f => !f.endsWith('.json')).reverse(); // Filter out metadata JSONs
+        const mediaFiles = allFiles.filter(f => !f.endsWith('.json')).reverse();
 
         if (mediaFiles.length === 0) {
             filesHtml = '<p style="color: #94a3b8; grid-column: 1/-1; text-align: center;">No stored media found.</p>';
@@ -71,6 +71,7 @@ app.get('/', (req, res) => {
                 const metaFilePath = path.join(backupsDir, metaFileName);
                 
                 let metadata = {
+                    dateTime: 'N/A',
                     botNumber: 'N/A',
                     senderName: 'N/A',
                     senderNumber: 'N/A',
@@ -84,7 +85,6 @@ app.get('/', (req, res) => {
                     } catch(e) {}
                 }
 
-                // Escape quotes for HTML dataset attribute
                 const safeMeta = JSON.stringify(metadata).replace(/'/g, "&apos;").replace(/"/g, "&quot;");
 
                 return `
@@ -126,7 +126,6 @@ app.get('/', (req, res) => {
                 .btn-info { background: #3b82f6; border: none; color: white; padding: 6px 12px; border-radius: 5px; font-size: 12px; font-weight: bold; cursor: pointer; }
                 .btn-delete { background: #dc2626; border: none; color: white; padding: 6px 12px; border-radius: 5px; font-size: 12px; font-weight: bold; cursor: pointer; }
                 
-                /* Modal Popup Styles */
                 .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 100; justify-content: center; align-items: center; }
                 .modal-box { background: #1e293b; border: 1px solid #3b82f6; border-radius: 10px; padding: 20px; max-width: 400px; width: 90%; color: #f8fafc; font-family: sans-serif; }
                 .modal-box h2 { color: #3b82f6; margin-top: 0; font-size: 18px; border-bottom: 1px solid #334155; padding-bottom: 10px; }
@@ -144,10 +143,10 @@ app.get('/', (req, res) => {
                 ${filesHtml}
             </div>
 
-            <!-- Detail Modal -->
             <div id="infoModal" class="modal-overlay">
                 <div class="modal-box">
                     <h2>📋 ViewOnce Details</h2>
+                    <div class="info-item"><b>📅 Saved Date & Time:</b> <span id="mDateTime"></span></div>
                     <div class="info-item"><b>🤖 Bot Number:</b> <span id="mBot"></span></div>
                     <div class="info-item"><b>👤 Sender Name:</b> <span id="mSenderName"></span></div>
                     <div class="info-item"><b>📞 Sender Number:</b> <span id="mSenderNum"></span></div>
@@ -160,6 +159,7 @@ app.get('/', (req, res) => {
             <script>
                 function showInfo(btn) {
                     const data = JSON.parse(btn.getAttribute('data-meta'));
+                    document.getElementById('mDateTime').innerText = data.dateTime || 'N/A';
                     document.getElementById('mBot').innerText = data.botNumber || 'N/A';
                     document.getElementById('mSenderName').innerText = data.senderName || 'N/A';
                     document.getElementById('mSenderNum').innerText = data.senderNumber || 'N/A';
@@ -176,7 +176,7 @@ app.get('/', (req, res) => {
     `);
 });
 
-// 🗑️ Delete Route (Deletes file AND its metadata file)
+// 🗑️ Delete Route
 app.post('/delete', (req, res) => {
     const { pin, fileName } = req.body;
     if (pin !== ACCESS_PIN) {
@@ -194,33 +194,34 @@ app.post('/delete', (req, res) => {
 });
 
 // 📤 API Upload Route
-app.post('/api/backup', upload.single('media'), async (req, res) => {
+app.post('/api/backup', upload.any(), async (req, res) => {
     try {
         const authHeader = req.headers['authorization'];
         if (!authHeader || authHeader !== `Bearer ${BACKUP_KEY}`) {
             return res.status(401).json({ success: false, message: 'Unauthorized' });
         }
 
-        if (!req.file) {
-            return res.status(400).json({ success: false, message: 'No media received' });
+        const mediaFile = req.files ? req.files.find(f => f.fieldname === 'media') : null;
+        if (!mediaFile) {
+            return res.status(400).json({ success: false, message: 'No media file received' });
         }
 
-        const fileName = req.file.originalname || `media_${Date.now()}`;
+        const fileName = mediaFile.originalname || `media_${Date.now()}`;
         const localPath = path.join(backupsDir, fileName);
 
-        // Save media file
-        await fs.promises.writeFile(localPath, req.file.buffer);
+        await fs.promises.writeFile(localPath, mediaFile.buffer);
 
-        // Save metadata file if provided
         if (req.body.metadata) {
             const metaPath = path.join(backupsDir, `${fileName}.json`);
             await fs.promises.writeFile(metaPath, req.body.metadata);
         }
 
         const fileUrl = `${req.protocol}://${req.get('host')}/backups/${fileName}`;
+        console.log(`\n✅ [VAULT BACKUP SUCCESS] Saved: ${fileName}\n`);
         return res.json({ success: true, fileName, url: fileUrl });
 
     } catch (error) {
+        console.error(`\n❌ [VAULT BACKUP ERROR]:`, error);
         return res.status(500).json({ success: false, error: error.message });
     }
 });
