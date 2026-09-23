@@ -88,7 +88,10 @@ app.get('/', (req, res) => {
                 const safeMeta = JSON.stringify(metadata).replace(/'/g, "&apos;").replace(/"/g, "&quot;");
 
                 return `
-                    <div class="media-card">
+                    <div class="media-card" id="card-${file}">
+                        <div class="card-checkbox-wrapper">
+                            <input type="checkbox" name="selectedFiles" value="${file}" class="file-checkbox" onchange="toggleCardStyle(this, '${file}')" />
+                        </div>
                         ${isVideo ? 
                             `<video src="${fileUrl}" controls preload="metadata"></video>` : 
                             `<img src="${fileUrl}" loading="lazy" />`
@@ -97,7 +100,7 @@ app.get('/', (req, res) => {
                             <button class="btn-info" data-meta='${safeMeta}' onclick="showInfo(this)">ℹ️ Info</button>
                             <form method="POST" action="/delete" style="margin: 0;">
                                 <input type="hidden" name="pin" value="${userPin}" />
-                                <input type="hidden" name="fileName" value="${file}" />
+                                <input type="hidden" name="fileNames" value="${file}" />
                                 <button type="submit" class="btn-delete" onclick="return confirm('Delete this file permanently?')">🗑️ Delete</button>
                             </form>
                         </div>
@@ -117,10 +120,24 @@ app.get('/', (req, res) => {
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
                 body { background: #0f172a; color: #f8fafc; font-family: sans-serif; margin: 0; padding: 20px; }
-                .header { text-align: center; margin-bottom: 25px; border-bottom: 2px solid #22c55e; padding-bottom: 15px; }
+                .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #22c55e; padding-bottom: 15px; }
                 h1 { color: #22c55e; margin: 0 0 5px 0; }
+                
+                .toolbar { max-width: 1200px; margin: 0 auto 20px auto; display: flex; gap: 10px; flex-wrap: wrap; justify-content: space-between; background: #1e293b; padding: 12px 20px; border-radius: 8px; border: 1px solid #334155; align-items: center; }
+                .toolbar-group { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+                .btn-tool { background: #334155; border: none; color: white; padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: bold; cursor: pointer; transition: background 0.2s; }
+                .btn-tool:hover { background: #475569; }
+                .btn-mark-all { background: #2563eb; }
+                .btn-mark-all:hover { background: #1d4ed8; }
+                .btn-delete-selected { background: #dc2626; }
+                .btn-delete-selected:hover { background: #b91c1c; }
+
                 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; max-width: 1200px; margin: 0 auto; }
-                .media-card { background: #1e293b; border: 1px solid #334155; border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
+                .media-card { background: #1e293b; border: 2px solid #334155; border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; position: relative; transition: border-color 0.2s; }
+                .media-card.marked { border-color: #22c55e; box-shadow: 0 0 10px rgba(34, 197, 94, 0.3); }
+                .card-checkbox-wrapper { position: absolute; top: 10px; left: 10px; z-index: 10; background: rgba(15, 23, 42, 0.7); padding: 5px; border-radius: 6px; backdrop-filter: blur(4px); }
+                .file-checkbox { width: 18px; height: 18px; cursor: pointer; accent-color: #22c55e; }
+
                 .media-card img, .media-card video { width: 100%; height: 220px; object-fit: cover; background: #000; }
                 .card-info { padding: 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px; background: #1e293b; }
                 .btn-info { background: #3b82f6; border: none; color: white; padding: 6px 12px; border-radius: 5px; font-size: 12px; font-weight: bold; cursor: pointer; }
@@ -139,6 +156,21 @@ app.get('/', (req, res) => {
                 <h1>🤡 JOKER MEDIA VAULT</h1>
                 <span style="color: #22c55e; font-size: 14px;">● ONLINE & SECURED</span>
             </div>
+
+            <div class="toolbar">
+                <div class="toolbar-group">
+                    <button class="btn-tool btn-mark-all" onclick="markAll(true)">✅ Mark All</button>
+                    <button class="btn-tool" onclick="markAll(false)">❌ Unmark All</button>
+                </div>
+                <div class="toolbar-group">
+                    <form id="batchDeleteForm" method="POST" action="/delete" onsubmit="return confirm('Delete all selected files permanently?')">
+                        <input type="hidden" name="pin" value="${userPin}" />
+                        <input type="hidden" name="fileNames" id="batchFileNames" value="" />
+                        <button type="submit" class="btn-tool btn-delete-selected">🗑️ Delete Selected</button>
+                    </form>
+                </div>
+            </div>
+
             <div class="grid">
                 ${filesHtml}
             </div>
@@ -157,6 +189,44 @@ app.get('/', (req, res) => {
             </div>
 
             <script>
+                function toggleCardStyle(checkbox, fileName) {
+                    const card = document.getElementById('card-' + fileName);
+                    if (checkbox.checked) {
+                        card.classList.add('marked');
+                    } else {
+                        card.classList.remove('marked');
+                    }
+                    updateBatchInput();
+                }
+
+                function markAll(select) {
+                    const checkboxes = document.querySelectorAll('.file-checkbox');
+                    checkboxes.forEach(cb => {
+                        cb.checked = select;
+                        const card = cb.closest('.media-card');
+                        if (select) {
+                            card.classList.add('marked');
+                        } else {
+                            card.classList.remove('marked');
+                        }
+                    });
+                    updateBatchInput();
+                }
+
+                function updateBatchInput() {
+                    const checked = document.querySelectorAll('.file-checkbox:checked');
+                    const filenames = Array.from(checked).map(cb => cb.value);
+                    document.getElementById('batchFileNames').value = filenames.join(',');
+                }
+
+                document.getElementById('batchDeleteForm').addEventListener('submit', function(e) {
+                    const batchVal = document.getElementById('batchFileNames').value;
+                    if (!batchVal) {
+                        e.preventDefault();
+                        alert('Please select at least one media item to delete.');
+                    }
+                });
+
                 function showInfo(btn) {
                     const data = JSON.parse(btn.getAttribute('data-meta'));
                     document.getElementById('mDateTime').innerText = data.dateTime || 'N/A';
@@ -176,20 +246,29 @@ app.get('/', (req, res) => {
     `);
 });
 
-// 🗑️ Delete Route
+// 🗑️ Delete Route (Supports single or batch file deletion)
 app.post('/delete', (req, res) => {
-    const { pin, fileName } = req.body;
+    const { pin, fileNames, fileName } = req.body;
     if (pin !== ACCESS_PIN) {
         return res.status(403).send('Unauthorized');
     }
 
-    if (fileName) {
-        const filePath = path.join(backupsDir, path.basename(fileName));
-        const metaPath = path.join(backupsDir, `${path.basename(fileName)}.json`);
+    // Handle comma-separated list or individual file names
+    let filesToDelete = [];
+    if (fileNames) {
+        filesToDelete = fileNames.split(',').map(f => f.trim()).filter(Boolean);
+    } else if (fileName) {
+        filesToDelete = [fileName];
+    }
+
+    for (const file of filesToDelete) {
+        const filePath = path.join(backupsDir, path.basename(file));
+        const metaPath = path.join(backupsDir, `${path.basename(file)}.json`);
         
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
         if (fs.existsSync(metaPath)) fs.unlinkSync(metaPath);
     }
+
     res.redirect(`/?pin=${encodeURIComponent(pin)}`);
 });
 
