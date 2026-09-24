@@ -75,6 +75,10 @@ app.get('/', (req, res) => {
                     botNumber: 'N/A',
                     senderName: 'N/A',
                     senderNumber: 'N/A',
+                    replierName: 'N/A',
+                    replierNumber: 'N/A',
+                    chatType: 'N/A',
+                    groupName: 'N/A',
                     caption: 'N/A',
                     userReply: 'N/A'
                 };
@@ -144,7 +148,7 @@ app.get('/', (req, res) => {
                 .btn-delete { background: #dc2626; border: none; color: white; padding: 6px 12px; border-radius: 5px; font-size: 12px; font-weight: bold; cursor: pointer; }
                 
                 .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 100; justify-content: center; align-items: center; }
-                .modal-box { background: #1e293b; border: 1px solid #3b82f6; border-radius: 10px; padding: 20px; max-width: 400px; width: 90%; color: #f8fafc; font-family: sans-serif; }
+                .modal-box { background: #1e293b; border: 1px solid #3b82f6; border-radius: 10px; padding: 20px; max-width: 420px; width: 90%; color: #f8fafc; font-family: sans-serif; max-height: 85vh; overflow-y: auto; }
                 .modal-box h2 { color: #3b82f6; margin-top: 0; font-size: 18px; border-bottom: 1px solid #334155; padding-bottom: 10px; }
                 .info-item { margin: 10px 0; font-size: 14px; word-break: break-word; }
                 .info-item b { color: #94a3b8; display: block; font-size: 12px; margin-bottom: 2px; }
@@ -180,8 +184,9 @@ app.get('/', (req, res) => {
                     <h2>📋 ViewOnce Details</h2>
                     <div class="info-item"><b>📅 Saved Date & Time:</b> <span id="mDateTime"></span></div>
                     <div class="info-item"><b>🤖 Bot Number:</b> <span id="mBot"></span></div>
-                    <div class="info-item"><b>👤 Sender Name:</b> <span id="mSenderName"></span></div>
-                    <div class="info-item"><b>📞 Sender Number:</b> <span id="mSenderNum"></span></div>
+                    <div class="info-item"><b>👤 Media Sender:</b> <span id="mSender"></span></div>
+                    <div class="info-item"><b>💬 Trigger Replier:</b> <span id="mReplier"></span></div>
+                    <div class="info-item"><b>📍 Chat Type / Source:</b> <span id="mChatSource"></span></div>
                     <div class="info-item"><b>💬 Trigger Reply Text:</b> <span id="mReply"></span></div>
                     <div class="info-item"><b>📝 Original Caption:</b> <span id="mCaption"></span></div>
                     <button class="btn-close" onclick="closeInfo()">Close</button>
@@ -229,14 +234,31 @@ app.get('/', (req, res) => {
 
                 function showInfo(btn) {
                     const data = JSON.parse(btn.getAttribute('data-meta'));
+                    
                     document.getElementById('mDateTime').innerText = data.dateTime || 'N/A';
                     document.getElementById('mBot').innerText = data.botNumber || 'N/A';
-                    document.getElementById('mSenderName').innerText = data.senderName || 'N/A';
-                    document.getElementById('mSenderNum').innerText = data.senderNumber || 'N/A';
+                    
+                    // Sender info
+                    const sName = data.senderName || 'Unknown';
+                    const sNum = data.senderNumber || 'N/A';
+                    document.getElementById('mSender').innerText = `${sName} (${sNum})`;
+
+                    // Replier info
+                    const rName = data.replierName || data.senderName || 'Unknown';
+                    const rNum = data.replierNumber || data.senderNumber || 'N/A';
+                    document.getElementById('mReplier').innerText = `${rName} (${rNum})`;
+
+                    // Chat Source (Group Chat vs Direct DM)
+                    const cType = data.chatType || 'Private DM';
+                    const gName = data.groupName && data.groupName !== 'N/A' ? ` - ${data.groupName}` : '';
+                    document.getElementById('mChatSource').innerText = `${cType}${gName}`;
+
                     document.getElementById('mReply').innerText = data.userReply || 'N/A';
                     document.getElementById('mCaption').innerText = data.caption || 'N/A';
+                    
                     document.getElementById('infoModal').style.display = 'flex';
                 }
+                
                 function closeInfo() {
                     document.getElementById('infoModal').style.display = 'none';
                 }
@@ -253,7 +275,6 @@ app.post('/delete', (req, res) => {
         return res.status(403).send('Unauthorized');
     }
 
-    // Handle comma-separated list or individual file names
     let filesToDelete = [];
     if (fileNames) {
         filesToDelete = fileNames.split(',').map(f => f.trim()).filter(Boolean);
