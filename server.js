@@ -66,8 +66,8 @@ app.get('/', (req, res) => {
         } else {
             filesHtml = mediaFiles.map(file => {
                 const isVideo = file.endsWith('.mp4');
-                const fileUrl = `/backups/${file}`;
-                const metaFileName = `${file}.json`;
+                const fileUrl = '/backups/' + file;
+                const metaFileName = file + '.json';
                 const metaFilePath = path.join(backupsDir, metaFileName);
                 
                 let metadata = {
@@ -90,26 +90,24 @@ app.get('/', (req, res) => {
                 }
 
                 const safeMeta = JSON.stringify(metadata).replace(/'/g, "&apos;").replace(/"/g, "&quot;");
+                const mediaTag = isVideo 
+                    ? '<video src="' + fileUrl + '" controls preload="metadata"></video>'
+                    : '<img src="' + fileUrl + '" loading="lazy" />';
 
-                return `
-                    <div class="media-card" id="card-${file}">
-                        <div class="card-checkbox-wrapper">
-                            <input type="checkbox" name="selectedFiles" value="${file}" class="file-checkbox" onchange="toggleCardStyle(this, '${file}')" />
-                        </div>
-                        ${isVideo ? 
-                            `<video src="${fileUrl}" controls preload="metadata"></video>` : 
-                            `<img src="${fileUrl}" loading="lazy" />`
-                        }
-                        <div class="card-info">
-                            <button class="btn-info" data-meta='${safeMeta}' onclick="showInfo(this)">ℹ️ Info</button>
-                            <form method="POST" action="/delete" style="margin: 0;">
-                                <input type="hidden" name="pin" value="${userPin}" />
-                                <input type="hidden" name="fileNames" value="${file}" />
-                                <button type="submit" class="btn-delete" onclick="return confirm('Delete this file permanently?')">🗑️ Delete</button>
-                            </form>
-                        </div>
-                    </div>
-                `;
+                return '<div class="media-card" id="card-' + file + '">' +
+                            '<div class="card-checkbox-wrapper">' +
+                                '<input type="checkbox" name="selectedFiles" value="' + file + '" class="file-checkbox" onchange="toggleCardStyle(this, \'' + file + '\')" />' +
+                            '</div>' +
+                            mediaTag +
+                            '<div class="card-info">' +
+                                '<button class="btn-info" data-meta=\'' + safeMeta + '\' onclick="showInfo(this)">ℹ️ Info</button>' +
+                                '<form method="POST" action="/delete" style="margin: 0;">' +
+                                    '<input type="hidden" name="pin" value="' + userPin + '" />' +
+                                    '<input type="hidden" name="fileNames" value="' + file + '" />' +
+                                    '<button type="submit" class="btn-delete" onclick="return confirm(\'Delete this file permanently?\')">🗑️ Delete</button>' +
+                                '</form>' +
+                            '</div>' +
+                        '</div>';
             }).join('');
         }
     } catch (e) {
@@ -238,25 +236,25 @@ app.get('/', (req, res) => {
                     document.getElementById('mDateTime').innerText = data.dateTime || 'N/A';
                     document.getElementById('mBot').innerText = data.botNumber || 'N/A';
                     
-                    // 1. Sender Info
+                    // Sender Info
                     const sNum = data.senderNumber || 'N/A';
                     const sName = data.senderName || 'ViewOnce Sender';
-                    document.getElementById('mSender').innerText = `${sName} (${sNum})`;
+                    document.getElementById('mSender').innerText = sName + ' (' + sNum + ')';
 
-                    // 2. Replier Name & Number
+                    // Replier Info
                     const rNum = data.replierNumber || data.senderNumber || 'N/A';
                     const rName = data.replierName || 'Unknown User';
-                    document.getElementById('mReplier').innerText = `${rName} (${rNum})`;
+                    document.getElementById('mReplier').innerText = rName + ' (' + rNum + ')';
 
-                    // 3. Chat Location (Shows Group Name if group, or "Private" if direct chat)
+                    // Chat Location
                     if (data.chatType && (data.chatType.includes('Group') || (data.groupName && data.groupName !== 'N/A'))) {
                         const gName = (data.groupName && data.groupName !== 'N/A') ? data.groupName : 'Unknown Group';
-                        document.getElementById('mChatSource').innerText = `${gName} (Group)`;
+                        document.getElementById('mChatSource').innerText = gName + ' (Group)';
                     } else {
                         document.getElementById('mChatSource').innerText = 'Private';
                     }
 
-                    // 4. Trigger Reply & Caption
+                    // Trigger Reply & Caption
                     document.getElementById('mReply').innerText = data.userReply || 'N/A';
                     document.getElementById('mCaption').innerText = data.caption || 'N/A';
                     
@@ -288,20 +286,20 @@ app.post('/delete', (req, res) => {
 
     for (const file of filesToDelete) {
         const filePath = path.join(backupsDir, path.basename(file));
-        const metaPath = path.join(backupsDir, `${path.basename(file)}.json`);
+        const metaPath = path.join(backupsDir, path.basename(file) + '.json');
         
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
         if (fs.existsSync(metaPath)) fs.unlinkSync(metaPath);
     }
 
-    res.redirect(`/?pin=${encodeURIComponent(pin)}`);
+    res.redirect('/?pin=' + encodeURIComponent(pin));
 });
 
 // 📤 API Upload Route
 app.post('/api/backup', upload.any(), async (req, res) => {
     try {
         const authHeader = req.headers['authorization'];
-        if (!authHeader || authHeader !== `Bearer ${BACKUP_KEY}`) {
+        if (!authHeader || authHeader !== 'Bearer ' + BACKUP_KEY) {
             return res.status(401).json({ success: false, message: 'Unauthorized' });
         }
 
@@ -310,24 +308,24 @@ app.post('/api/backup', upload.any(), async (req, res) => {
             return res.status(400).json({ success: false, message: 'No media file received' });
         }
 
-        const fileName = mediaFile.originalname || `media_${Date.now()}`;
+        const fileName = mediaFile.originalname || ('media_' + Date.now());
         const localPath = path.join(backupsDir, fileName);
 
         await fs.promises.writeFile(localPath, mediaFile.buffer);
 
         if (req.body.metadata) {
-            const metaPath = path.join(backupsDir, `${fileName}.json`);
+            const metaPath = path.join(backupsDir, fileName + '.json');
             await fs.promises.writeFile(metaPath, req.body.metadata);
         }
 
-        const fileUrl = `${req.protocol}://${req.get('host')}/backups/${fileName}`;
-        console.log(`\n✅ [VAULT BACKUP SUCCESS] Saved: ${fileName}\n`);
+        const fileUrl = req.protocol + '://' + req.get('host') + '/backups/' + fileName;
+        console.log('\n✅ [VAULT BACKUP SUCCESS] Saved: ' + fileName + '\n');
         return res.json({ success: true, fileName, url: fileUrl });
 
     } catch (error) {
-        console.error(`\n❌ [VAULT BACKUP ERROR]:`, error);
+        console.error('\n❌ [VAULT BACKUP ERROR]:', error);
         return res.status(500).json({ success: false, error: error.message });
     }
 });
 
-app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
+app.listen(PORT, () => console.log('Server listening on port ' + PORT));
