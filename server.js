@@ -184,10 +184,10 @@ app.get('/', (req, res) => {
                     <h2>📋 ViewOnce Details</h2>
                     <div class="info-item"><b>📅 Saved Date & Time:</b> <span id="mDateTime"></span></div>
                     <div class="info-item"><b>🤖 Bot Number:</b> <span id="mBot"></span></div>
-                    <div class="info-item"><b>👤 Media Sender:</b> <span id="mSender"></span></div>
-                    <div class="info-item"><b>💬 Trigger Replier:</b> <span id="mReplier"></span></div>
-                    <div class="info-item"><b>📍 Chat Type / Source:</b> <span id="mChatSource"></span></div>
-                    <div class="info-item"><b>💬 Trigger Reply Text:</b> <span id="mReply"></span></div>
+                    <div class="info-item"><b>👤 Sender:</b> <span id="mSender"></span></div>
+                    <div class="info-item"><b>💬 Replier:</b> <span id="mReplier"></span></div>
+                    <div class="info-item"><b>📍 Chat Type:</b> <span id="mChatSource"></span></div>
+                    <div class="info-item"><b>💬 Reply Text:</b> <span id="mReply"></span></div>
                     <div class="info-item"><b>📝 Original Caption:</b> <span id="mCaption"></span></div>
                     <button class="btn-close" onclick="closeInfo()">Close</button>
                 </div>
@@ -239,19 +239,22 @@ app.get('/', (req, res) => {
                     document.getElementById('mBot').innerText = data.botNumber || 'N/A';
                     
                     // Sender info
-                    const sName = data.senderName || 'Unknown';
                     const sNum = data.senderNumber || 'N/A';
-                    document.getElementById('mSender').innerText = `${sName} (${sNum})`;
+                    const sName = (data.senderName && data.senderName !== 'ViewOnce Sender') ? `${data.senderName} (@${sNum})` : `@${sNum}`;
+                    document.getElementById('mSender').innerText = sName;
 
                     // Replier info
-                    const rName = data.replierName || data.senderName || 'Unknown';
                     const rNum = data.replierNumber || data.senderNumber || 'N/A';
-                    document.getElementById('mReplier').innerText = `${rName} (${rNum})`;
+                    const rName = data.replierName || 'Unknown';
+                    document.getElementById('mReplier').innerText = `${rName} (@${rNum})`;
 
-                    // Chat Source (Group Chat vs Direct DM)
-                    const cType = data.chatType || 'Private DM';
-                    const gName = data.groupName && data.groupName !== 'N/A' ? ` - ${data.groupName}` : '';
-                    document.getElementById('mChatSource').innerText = `${cType}${gName}`;
+                    // Chat Type (Displays Group Name if it's a group, else Private DM)
+                    if (data.chatType && data.chatType.includes('Group')) {
+                        const groupTitle = data.groupName && data.groupName !== 'N/A' ? data.groupName : 'Group Chat';
+                        document.getElementById('mChatSource').innerText = `Group Chat (${groupTitle})`;
+                    } else {
+                        document.getElementById('mChatSource').innerText = 'Private DM';
+                    }
 
                     document.getElementById('mReply').innerText = data.userReply || 'N/A';
                     document.getElementById('mCaption').innerText = data.caption || 'N/A';
@@ -268,7 +271,7 @@ app.get('/', (req, res) => {
     `);
 });
 
-// 🗑️ Delete Route (Supports single or batch file deletion)
+// 🗑️ Delete Route
 app.post('/delete', (req, res) => {
     const { pin, fileNames, fileName } = req.body;
     if (pin !== ACCESS_PIN) {
